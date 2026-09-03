@@ -1,0 +1,20 @@
+{
+  "name": "@onetrips/observability",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./headers": "./src/http-headers.ts"
+  },
+  "scripts": { "lint": "echo \"no lint\"" },
+  "dependencies": {
+    "@onetrips/database": "*",
+    "@onetrips/shared": "*",
+    "@sentry/node": "^10.22.0",
+    "pino": "^9.9.0",
+    "redis": "^5.8.2"
+  }
+}

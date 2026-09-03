@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #0f172a;
+  --color-gold: #d4af37;
+  --color-gold-dark: #996515;
+  --color-muted: #f0f5fa;
+  --color-surface: #ffffff;
+  --color-navy: #10172a;
+  --color-canvas: #f7f8fa;
+  --color-copy: #172033;
+  --color-copy-muted: #64748b;
+  --color-line: #e5e7eb;
+  --color-field: #f8fafc;
+  --color-gold-accent: #c9a227;
+  --color-gold-soft: #fbf7e8;
+
+  --shadow-gold: 0 40px 100px -20px rgba(212, 175, 55, 0.2);
+  --shadow-card: 0 20px 80px rgba(15, 23, 42, 0.06);
+
+  --radius-pill: 3rem;
+  --radius-card: 2.8125rem;
+}
+
+:root {
+  background: white;
+  color: #0f172a;
+}

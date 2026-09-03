@@ -1,0 +1,14 @@
+npm install
+npm install next@latest react@latest react-dom@latest
+npm install -D tailwindcss postcss autoprefixer
+npm install lucide-react
+npm install framer-motion
+npm install zustand
+npm install date-fns
+npm install lucide-react framer-motion zustand date-fns
+npm install prisma --save-dev
+npm install @prisma/client
+npx prisma init
+npx prisma migrate dev --name init_registration
+npm install bcryptjs
+npm install -D @types/bcryptjs

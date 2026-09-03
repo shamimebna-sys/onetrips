@@ -1,0 +1,50 @@
+{
+  "name": "onetrips",
+  "version": "0.1.0",
+  "private": true,
+  "notes": {
+    "mysql2": "mysql2 is required only for legacy MySQL → PostgreSQL migration. Never imported by apps, packages, workers, CI, backup, or restore. See scripts/ops/MYSQL-MIGRATION.md."
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/run-with-root-env.mjs turbo dev --filter=@onetrips/web",
+    "dev:all": "node scripts/run-with-root-env.mjs turbo dev",
+    "dev:web": "node scripts/run-with-root-env.mjs turbo dev --filter=@onetrips/web",
+    "dev:admin": "node scripts/run-with-root-env.mjs turbo dev --filter=@onetrips/admin",
+    "dev:b2b": "node scripts/run-with-root-env.mjs turbo dev --filter=@onetrips/b2b",
+    "build": "node scripts/run-with-root-env.mjs turbo build",
+    "lint": "turbo lint",
+    "db:generate": "npm run generate -w @onetrips/database",
+    "db:migrate": "npm run migrate -w @onetrips/database",
+    "db:studio": "npm run studio -w @onetrips/database",
+    "db:seed": "npm run seed -w @onetrips/database",
+    "db:migrate:deploy": "npm run migrate:deploy -w @onetrips/database",
+    "db:migrate:mysql": "node scripts/ops/migrate-mysql-to-postgres.mjs",
+    "db:verify:mysql": "node scripts/ops/verify-mysql-postgres.mjs",
+    "db:bootstrap:empty": "node scripts/ops/bootstrap-empty-postgres.mjs",
+    "worker": "npm run worker -w @onetrips/notifications",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "playwright test",
+    "backup": "node scripts/ops/backup-postgres.mjs",
+    "backup:restore": "node scripts/ops/restore-postgres.mjs",
+    "backup:drill": "node scripts/ops/restore-drill.mjs",
+    "backup:verify": "node scripts/ops/backup-verify.mjs",
+    "accept": "node scripts/ops/acceptance.mjs",
+    "load:search": "node scripts/ops/load-search.mjs"
+  },
+  "devDependencies": {
+    "mysql2": "^3.14.3",
+    "@playwright/test": "^1.55.0",
+    "turbo": "^2.5.8",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.12.1"
+}

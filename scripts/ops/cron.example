@@ -1,0 +1,17 @@
+# Recommended production schedule (system cron, not the Node worker)
+#
+# Daily 02:00 UTC backup + offsite copy, retain 14 days:
+#   0 2 * * * cd /opt/onetrips && /usr/bin/node scripts/ops/backup-postgres.mjs >> /var/log/onetrips-backup.log 2>&1
+#
+# Weekly restore drill Sundays 03:30 UTC (disposable database only):
+#   30 3 * * 0 cd /opt/onetrips && /usr/bin/node scripts/ops/restore-drill.mjs >> /var/log/onetrips-backup.log 2>&1
+#
+# Environment (do not put secrets in the crontab file — use a root-only env file):
+#   DATABASE_URL=postgresql://...
+#   BACKUP_DIR=/var/backups/onetrips
+#   BACKUP_RETENTION_DAYS=14
+#   BACKUP_OFFSITE_REQUIRED=YES
+#   BACKUP_OFFSITE_DIR=/mnt/offsite/onetrips
+#   # or BACKUP_RCLONE_REMOTE=s3:onetrips-backups
+#
+# Restore to production is never scheduled. It requires RESTORE_DATABASE=YES.

@@ -1,0 +1,26 @@
+{
+  "name": "@onetrips/notifications",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "dev": "tsx src/worker.ts",
+    "worker": "tsx src/worker.ts",
+    "lint": "echo \"no lint\""
+  },
+  "dependencies": {
+    "@onetrips/database": "*",
+    "@onetrips/shared": "*",
+    "dotenv": "^17.4.2",
+    "nodemailer": "^6.9.16",
+    "redis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.19",
+    "tsx": "^4.20.5",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "envMode": "strict",
+  "globalDependencies": [".env"],
+  "globalEnv": ["NODE_ENV", "NEXT_PUBLIC_*"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "^generate"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_ACCESS_SECRET",
+        "JWT_REFRESH_SECRET",
+        "JWT_SECRET",
+        "ENCRYPTION_KEY",
+        "PAYMENT_WEBHOOK_SECRET",
+        "FLIGHT_PROVIDER",
+        "HOTEL_PROVIDER",
+        "MOCK_GDS_SCENARIO",
+        "MOCK_HOTEL_SCENARIO",
+        "FLIGHT_SEARCH_TTL_SECONDS",
+        "HOTEL_SEARCH_TTL_SECONDS",
+        "GDS_*",
+        "NOTIFY_INLINE",
+        "SMTP_*",
+        "SMS_*",
+        "LOG_LEVEL",
+        "SENTRY_*",
+        "OT_ALLOW_DEV_SECRETS",
+        "OTEL_SERVICE_NAME"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_ACCESS_SECRET",
+        "JWT_REFRESH_SECRET",
+        "JWT_SECRET",
+        "ENCRYPTION_KEY",
+        "PAYMENT_WEBHOOK_SECRET",
+        "FLIGHT_PROVIDER",
+        "HOTEL_PROVIDER",
+        "MOCK_GDS_SCENARIO",
+        "MOCK_HOTEL_SCENARIO",
+        "FLIGHT_SEARCH_TTL_SECONDS",
+        "HOTEL_SEARCH_TTL_SECONDS",
+        "GDS_*",
+        "NOTIFY_INLINE",
+        "SMTP_*",
+        "SMS_*",
+        "LOG_LEVEL",
+        "SENTRY_*",
+        "OT_ALLOW_DEV_SECRETS",
+        "OTEL_SERVICE_NAME"
+      ]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "generate": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    }
+  }
+}

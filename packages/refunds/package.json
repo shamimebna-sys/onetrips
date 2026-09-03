@@ -1,0 +1,23 @@
+{
+  "name": "@onetrips/refunds",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "lint": "echo \"no lint\"" },
+  "dependencies": {
+    "@onetrips/booking": "*",
+    "@onetrips/database": "*",
+    "@onetrips/finance": "*",
+    "@onetrips/flight-search": "*",
+    "@onetrips/hotel-search": "*",
+    "@onetrips/notifications": "*",
+    "@onetrips/payments": "*",
+    "@onetrips/promotions": "*",
+    "@onetrips/shared": "*",
+    "@onetrips/ticketing": "*",
+    "zod": "^3.25.76"
+  }
+}

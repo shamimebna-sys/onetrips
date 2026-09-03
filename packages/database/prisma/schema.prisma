@@ -1,0 +1,1060 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Legacy compatibility (Phase 1). Migrated into User + Organization in Phase 2.
+// ---------------------------------------------------------------------------
+model Agent {
+  id              Int      @id @default(autoincrement())
+  fullName        String
+  companyName     String
+  email           String   @unique
+  phone           String
+  country         String
+  city            String
+  password        String
+  nidUrl          String?
+  tradeLicenseUrl String?
+  createdAt       DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+enum UserType {
+  CUSTOMER
+  B2B
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum RoleScope {
+  PLATFORM
+  B2B
+  CUSTOMER
+}
+
+model User {
+  id               String     @id @default(cuid())
+  email            String?    @unique
+  phone            String?    @unique
+  passwordHash     String?
+  displayName      String?
+  type             UserType
+  status           UserStatus @default(PENDING)
+  mfaEnabled       Boolean    @default(false)
+  mfaSecret        String?
+  failedLoginCount Int        @default(0)
+  lockedUntil      DateTime?
+  phoneVerifiedAt  DateTime?
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  sessions     UserSession[]
+  loginHistory UserLoginHistory[]
+  roles        UserRole[]
+  customer     Customer?
+  orgUsers     OrganizationUser[]
+  bookings     Booking[]          @relation("BookingOwner")
+  auditLogs    AuditLog[]
+  notifications NotificationLog[]
+  inAppNotifications InAppNotification[]
+  supportRequests SupportRequest[]
+  promoRedemptions PromotionRedemption[]
+
+  @@index([type, status])
+}
+
+model UserSession {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  deviceInfo       String?   @db.VarChar(255)
+  ipAddress        String?   @db.VarChar(64)
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserLoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  ipAddress String?  @db.VarChar(64)
+  device    String?  @db.VarChar(255)
+  status    String   @db.VarChar(32)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model OtpChallenge {
+  id          String    @id @default(cuid())
+  channel     String    @db.VarChar(16)
+  destination String    @db.VarChar(128)
+  purpose     String    @db.VarChar(32)
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([destination, purpose])
+  @@index([expiresAt])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  scope       RoleScope
+  description String?   @db.VarChar(255)
+
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  code        String @unique @db.VarChar(64)
+  description String @db.VarChar(255)
+  category    String @db.VarChar(32)
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  id             String  @id @default(cuid())
+  userId         String
+  roleId         String
+  organizationId String?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, organizationId])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Organizations (B2B)
+// ---------------------------------------------------------------------------
+enum OrganizationType {
+  AGENCY
+  CORPORATE
+  SUB_AGENT
+  RESELLER
+}
+
+enum OrganizationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum OrgUserRole {
+  OWNER
+  ADMIN
+  AGENT
+  ACCOUNTANT
+  VIEWER
+}
+
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  type        OrganizationType   @default(AGENCY)
+  status      OrganizationStatus @default(PENDING)
+  creditLimit Decimal            @default(0) @db.Decimal(19, 4)
+  country     String?            @db.VarChar(64)
+  city        String?            @db.VarChar(64)
+  nidUrl      String?
+  tradeLicenseUrl String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+
+  branches     OrganizationBranch[]
+  users        OrganizationUser[]
+  userRoles    UserRole[]
+  bookings     Booking[]
+  invoices     Invoice[]
+  markupRules  MarkupRule[]
+  savedPax     SavedPassenger[]
+
+  @@index([status])
+}
+
+model OrganizationBranch {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  address        String? @db.VarChar(255)
+  status         String  @default("ACTIVE") @db.VarChar(32)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        OrganizationUser[]
+
+  @@index([organizationId])
+}
+
+model OrganizationUser {
+  id             String     @id @default(cuid())
+  organizationId String
+  branchId       String?
+  userId         String
+  role           OrgUserRole
+  createdAt      DateTime   @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       OrganizationBranch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+model Country {
+  id    String @id @default(cuid())
+  code  String @unique @db.VarChar(2)
+  name  String
+
+  cities City[]
+}
+
+model City {
+  id        String  @id @default(cuid())
+  countryId String
+  name      String
+  code      String? @db.VarChar(8)
+
+  country  Country   @relation(fields: [countryId], references: [id])
+  airports Airport[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
+}
+
+model Airport {
+  id        String  @id @default(cuid())
+  cityId    String
+  iataCode  String  @unique @db.VarChar(3)
+  name      String
+  timezone  String  @db.VarChar(64)
+  isActive  Boolean @default(true)
+  isPopular Boolean @default(false)
+
+  city City @relation(fields: [cityId], references: [id])
+
+  @@index([isActive, isPopular])
+}
+
+model Airline {
+  id        String  @id @default(cuid())
+  iataCode  String  @unique @db.VarChar(2)
+  icaoCode  String? @db.VarChar(3)
+  name      String
+  logoUrl   String?
+  isActive  Boolean @default(true)
+}
+
+enum SupplierType {
+  GDS
+  AIRLINE
+  HOTEL
+  PAYMENT
+  SMS
+  EMAIL
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  DEGRADED
+}
+
+model Supplier {
+  id     String         @id @default(cuid())
+  name   String
+  type   SupplierType
+  status SupplierStatus @default(ACTIVE)
+  config Json?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  bookings Booking[]
+  markups  MarkupRule[]
+  commissions CommissionRule[]
+}
+
+// ---------------------------------------------------------------------------
+// Customer
+// ---------------------------------------------------------------------------
+enum PassengerType {
+  ADULT
+  CHILD
+  INFANT
+}
+
+model Customer {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  firstName            String
+  lastName             String
+  dateOfBirth          DateTime?
+  gender               String?   @db.VarChar(16)
+  nationalityId        String?
+  marketingConsentAt   DateTime?
+  addressLine1         String?   @db.VarChar(160)
+  addressLine2         String?   @db.VarChar(160)
+  city                 String?   @db.VarChar(80)
+  postalCode           String?   @db.VarChar(20)
+  countryId            String?
+  photoUrl             String?   @db.VarChar(255)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passengers   SavedPassenger[]
+  preference   CustomerPreference?
+}
+
+model SavedPassenger {
+  id              String        @id @default(cuid())
+  customerId      String?
+  organizationId  String?
+  type            PassengerType @default(ADULT)
+  firstName       String
+  lastName        String
+  passportNumber  String?       @db.VarChar(255)
+  passportExpiry  DateTime?
+  nationality     String?       @db.VarChar(64)
+  dateOfBirth     DateTime?
+  isPreferred     Boolean       @default(false)
+  frequentFlyerNumber String?   @db.VarChar(64)
+  createdAt       DateTime      @default(now())
+
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Search (ephemeral metadata only — fare payloads live in Redis)
+// ---------------------------------------------------------------------------
+model FlightSearchSession {
+  id           String   @id @default(cuid())
+  userId       String?
+  sessionToken String   @unique
+  searchParams Json
+  providerIds  Json?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model HotelSearchSession {
+  id           String   @id @default(cuid())
+  userId       String?
+  sessionToken String   @unique
+  searchParams Json
+  providerIds  Json?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Booking
+// ---------------------------------------------------------------------------
+enum BookingType {
+  FLIGHT
+  HOTEL
+  PACKAGE
+  VISA
+  TRANSFER
+  INSURANCE
+  BUS
+  TRAIN
+  CAR
+  ACTIVITY
+}
+
+enum BookingStatus {
+  SEARCHED
+  SELECTED
+  REVALIDATING
+  PRICE_CONFIRMED
+  PRICE_CHANGED
+  UNAVAILABLE
+  PASSENGER_PENDING
+  PAYMENT_PENDING
+  PAYMENT_PROCESSING
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  BOOKING_PENDING
+  BOOKED
+  BOOKING_FAILED
+  BOOKING_UNKNOWN
+  TICKETING_PENDING
+  TICKETED
+  TICKETING_FAILED
+  TICKETING_UNKNOWN
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+  EXPIRED
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  bookingRef     String        @unique @db.VarChar(32)
+  type           BookingType   @default(FLIGHT)
+  status         BookingStatus @default(SEARCHED)
+  userId         String?
+  organizationId String?
+  supplierId     String?
+  providerRef    String?       @db.VarChar(64)
+  totalAmount    Decimal       @db.Decimal(19, 4)
+  currency       String        @db.VarChar(3)
+  supplierCost   Decimal?      @db.Decimal(19, 4)
+  markupAmount   Decimal?      @db.Decimal(19, 4)
+  serviceFee     Decimal?      @db.Decimal(19, 4)
+  discountAmount Decimal?      @db.Decimal(19, 4)
+  snapshot       Json?
+  expiresAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user         User?         @relation("BookingOwner", fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  supplier     Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  history      BookingStatusHistory[]
+  passengers   BookingPassenger[]
+  segments     BookingSegment[]
+  tickets      Ticket[]
+  payments     Payment[]
+  invoices     Invoice[]
+  ledger       LedgerEntry[]
+  providerOps  ProviderOperation[]
+  promoRedemption PromotionRedemption?
+
+  @@index([userId, status])
+  @@index([organizationId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@index([providerRef])
+}
+
+model BookingStatusHistory {
+  id         String        @id @default(cuid())
+  bookingId  String
+  fromStatus BookingStatus?
+  toStatus   BookingStatus
+  reason     String?       @db.VarChar(255)
+  actorId    String?
+  actorType  String?       @db.VarChar(32)
+  createdAt  DateTime      @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt])
+}
+
+model BookingPassenger {
+  id             String        @id @default(cuid())
+  bookingId      String
+  type           PassengerType
+  firstName      String
+  lastName       String
+  passportNumber String?       @db.VarChar(255)
+  passportExpiry DateTime?
+  nationality    String?       @db.VarChar(64)
+  dateOfBirth    DateTime?
+  ticketNumber   String?       @db.VarChar(32)
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@index([bookingId])
+}
+
+model BookingSegment {
+  id          String   @id @default(cuid())
+  bookingId   String
+  sequenceNo  Int
+  origin      String   @db.VarChar(3)
+  destination String   @db.VarChar(3)
+  departureAt DateTime
+  arrivalAt   DateTime
+  airlineCode String   @db.VarChar(2)
+  flightNumber String  @db.VarChar(8)
+  cabin       String?  @db.VarChar(16)
+  fareClass   String?  @db.VarChar(8)
+  baggage     String?  @db.VarChar(64)
+  operatedBy  String?  @db.VarChar(2)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([origin, destination, departureAt])
+}
+
+// ---------------------------------------------------------------------------
+// Ticketing
+// ---------------------------------------------------------------------------
+enum TicketStatus {
+  ISSUED
+  VOIDED
+  REFUNDED
+  EXCHANGED
+}
+
+model Ticket {
+  id                 String       @id @default(cuid())
+  bookingId          String
+  bookingPassengerId String?
+  ticketNumber       String       @unique @db.VarChar(32)
+  status             TicketStatus @default(ISSUED)
+  issuedAt           DateTime     @default(now())
+  voidedAt           DateTime?
+  pdfUrl             String?
+
+  booking   Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  passenger BookingPassenger? @relation(fields: [bookingPassengerId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+}
+
+enum ProviderOperationType {
+  SEARCH
+  REVALIDATE
+  CREATE_BOOKING
+  GET_BOOKING_STATUS
+  ISSUE_TICKET
+  VOID_TICKET
+  CANCEL_BOOKING
+  GET_FARE_RULES
+  GET_SEAT_MAP
+}
+
+enum ProviderOperationStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  UNKNOWN
+}
+
+model ProviderOperation {
+  id                 String                   @id @default(cuid())
+  bookingId          String?
+  provider           String                   @db.VarChar(32)
+  operation          ProviderOperationType
+  idempotencyKey     String                   @unique @db.VarChar(128)
+  correlationId      String                   @db.VarChar(64)
+  providerReference  String?                  @db.VarChar(64)
+  status             ProviderOperationStatus  @default(STARTED)
+  requestMetadata    Json?
+  responseMetadata   Json?
+  errorCode          String?                  @db.VarChar(64)
+  errorMessage       String?                  @db.VarChar(255)
+  startedAt          DateTime                 @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId, operation])
+  @@index([provider, startedAt])
+  @@index([status, startedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  EXPIRED
+  REFUND_INITIATED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  bookingId      String
+  amount         Decimal       @db.Decimal(19, 4)
+  currency       String        @db.VarChar(3)
+  providerRef    String?       @db.VarChar(64)
+  status         PaymentStatus @default(PENDING)
+  method         String?       @db.VarChar(32)
+  idempotencyKey String        @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  booking   Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  attempts  PaymentAttempt[]
+  ledger    LedgerEntry[]
+
+  @@index([bookingId])
+  @@index([status, createdAt])
+  @@index([providerRef])
+}
+
+model PaymentAttempt {
+  id               String        @id @default(cuid())
+  paymentId        String
+  attemptNo        Int
+  providerRef      String?       @db.VarChar(64)
+  status           PaymentStatus
+  providerResponse Json?
+  createdAt        DateTime      @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, attemptNo])
+}
+
+model PaymentWebhookEvent {
+  id             String    @id @default(cuid())
+  provider       String    @db.VarChar(32)
+  eventId        String    @db.VarChar(128)
+  payload        Json
+  signature      String?   @db.VarChar(255)
+  status         String    @default("RECEIVED") @db.VarChar(32)
+  idempotencyKey String    @unique
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([provider, eventId])
+}
+
+// ---------------------------------------------------------------------------
+// Finance
+// ---------------------------------------------------------------------------
+enum WalletOwnerType {
+  ORGANIZATION
+  CUSTOMER
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum LedgerType {
+  DEBIT
+  CREDIT
+  DEPOSIT
+  REFUND
+  COMMISSION
+  SERVICE_FEE
+  MARKUP
+  ADJUSTMENT
+  GATEWAY_FEE
+}
+
+model Wallet {
+  id         String          @id @default(cuid())
+  ownerId    String
+  ownerType  WalletOwnerType
+  currency   String          @db.VarChar(3)
+  status     WalletStatus    @default(ACTIVE)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  entries LedgerEntry[]
+
+  @@unique([ownerId, ownerType, currency])
+}
+
+model LedgerEntry {
+  id        String     @id @default(cuid())
+  walletId  String
+  bookingId String?
+  paymentId String?
+  type      LedgerType
+  amount    Decimal    @db.Decimal(19, 4)
+  currency  String     @db.VarChar(3)
+  reference String     @unique @db.VarChar(64)
+  actorId   String?
+  note      String?    @db.VarChar(255)
+  createdAt DateTime   @default(now())
+
+  wallet  Wallet   @relation(fields: [walletId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([walletId, createdAt])
+  @@index([bookingId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  VOID
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  bookingId      String?
+  organizationId String?
+  invoiceNo      String        @unique @db.VarChar(32)
+  amount         Decimal       @db.Decimal(19, 4)
+  tax            Decimal       @default(0) @db.Decimal(19, 4)
+  total          Decimal       @db.Decimal(19, 4)
+  currency       String        @db.VarChar(3)
+  status         InvoiceStatus @default(DRAFT)
+  issuedAt       DateTime?
+  dueAt          DateTime?
+  pdfUrl         String?
+  createdAt      DateTime      @default(now())
+
+  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  items        InvoiceItem[]
+
+  @@index([organizationId])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String  @db.VarChar(255)
+  quantity    Int     @default(1)
+  unitPrice   Decimal @db.Decimal(19, 4)
+  amount      Decimal @db.Decimal(19, 4)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Pricing
+// ---------------------------------------------------------------------------
+enum MarkupType {
+  FLAT
+  PERCENT
+}
+
+enum PricingAudience {
+  B2C
+  B2B
+  ORGANIZATION
+}
+
+model MarkupRule {
+  id             String          @id @default(cuid())
+  supplierId     String?
+  airlineCode    String?         @db.VarChar(2)
+  routeOrigin    String?         @db.VarChar(3)
+  routeDest      String?         @db.VarChar(3)
+  cabin          String?         @db.VarChar(16)
+  markupType     MarkupType
+  markupValue    Decimal         @db.Decimal(19, 4)
+  currency       String?         @db.VarChar(3)
+  appliesTo      PricingAudience @default(B2C)
+  organizationId String?
+  validFrom      DateTime?
+  validTo        DateTime?
+  priority       Int             @default(0)
+  status         String          @default("ACTIVE") @db.VarChar(16)
+  createdAt      DateTime        @default(now())
+
+  supplier     Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([appliesTo, status])
+}
+
+model CommissionRule {
+  id              String     @id @default(cuid())
+  supplierId      String?
+  airlineCode     String?    @db.VarChar(2)
+  commissionType  MarkupType
+  commissionValue Decimal    @db.Decimal(19, 4)
+  validFrom       DateTime?
+  validTo         DateTime?
+  status          String     @default("ACTIVE") @db.VarChar(16)
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+}
+
+model ServiceFeeRule {
+  id        String     @id @default(cuid())
+  name      String
+  amount    Decimal    @db.Decimal(19, 4)
+  type      MarkupType
+  appliesTo PricingAudience @default(B2C)
+  status    String     @default("ACTIVE") @db.VarChar(16)
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model NotificationTemplate {
+  id        String              @id @default(cuid())
+  name      String              @unique
+  channel   NotificationChannel
+  subject   String?             @db.VarChar(255)
+  body      String              @db.Text
+  variables Json?
+  version   Int                 @default(1)
+}
+
+model NotificationLog {
+  id          String              @id @default(cuid())
+  userId      String?
+  type        NotificationChannel
+  channel     String              @db.VarChar(64)
+  recipient   String
+  templateId  String?
+  payload     Json?
+  status      NotificationStatus  @default(QUEUED)
+  providerId  String?
+  providerRef String?
+  createdAt   DateTime            @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([recipient, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Audit + config
+// ---------------------------------------------------------------------------
+model AuditLog {
+  id            String   @id @default(cuid())
+  actorId       String?
+  actorType     String   @db.VarChar(32)
+  action        String   @db.VarChar(64)
+  entityType    String   @db.VarChar(64)
+  entityId      String
+  previousState Json?
+  newState      Json?
+  ipAddress     String?  @db.VarChar(64)
+  reason        String?  @db.VarChar(255)
+  createdAt     DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+}
+
+model Currency {
+  id            String  @id @default(cuid())
+  code          String  @unique @db.VarChar(3)
+  name          String
+  symbol        String  @db.VarChar(8)
+  decimalPlaces Int     @default(2)
+  isActive      Boolean @default(true)
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String   @db.VarChar(3)
+  toCurrency   String   @db.VarChar(3)
+  rate         Decimal  @db.Decimal(18, 8)
+  source       String   @db.VarChar(32)
+  validAt      DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency, validAt])
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique @db.VarChar(64)
+  value       String   @db.Text
+  dataType    String   @db.VarChar(16)
+  description String?  @db.VarChar(255)
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+}
+
+model IdempotencyRecord {
+  id           String   @id @default(cuid())
+  key          String   @unique @db.VarChar(128)
+  scope        String   @db.VarChar(32)
+  responseJson Json?
+  status       String   @db.VarChar(32)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([expiresAt])
+}
+
+model Promotion {
+  id                String    @id @default(cuid())
+  code              String    @unique @db.VarChar(32)
+  name              String    @db.VarChar(120)
+  description       String?   @db.Text
+  percentOff        Decimal?  @db.Decimal(5, 2)
+  amountOff         Decimal?  @db.Decimal(12, 2)
+  minBookingAmount  Decimal?  @db.Decimal(12, 2)
+  maxDiscount       Decimal?  @db.Decimal(12, 2)
+  currency          String    @default("BDT") @db.VarChar(3)
+  startsAt          DateTime
+  endsAt            DateTime
+  usageLimit        Int?
+  perCustomerLimit  Int       @default(1)
+  audience          PricingAudience @default(B2C)
+  airlineCode       String?   @db.VarChar(3)
+  routeOrigin       String?   @db.VarChar(3)
+  routeDest         String?   @db.VarChar(3)
+  flightEligible    Boolean   @default(true)
+  hotelEligible     Boolean   @default(true)
+  status            String    @default("ACTIVE") @db.VarChar(16)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  redemptions       PromotionRedemption[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+enum PromotionRedemptionStatus {
+  RESERVED
+  COMMITTED
+  RELEASED
+}
+
+model PromotionRedemption {
+  id           String   @id @default(cuid())
+  promotionId  String
+  userId       String
+  bookingId    String   @unique
+  amount       Decimal  @db.Decimal(12, 2)
+  status       PromotionRedemptionStatus @default(RESERVED)
+  expiresAt    DateTime?
+  committedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking   Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([promotionId, userId, status])
+}
+
+model CustomerPreference {
+  id               String   @id @default(cuid())
+  customerId       String   @unique
+  locale           String   @default("en") @db.VarChar(8)
+  currency         String   @default("BDT") @db.VarChar(3)
+  emailOptIn       Boolean  @default(true)
+  smsOptIn         Boolean  @default(true)
+  marketingOptIn   Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model InAppNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String    @db.VarChar(32)
+  title     String    @db.VarChar(160)
+  body      String    @db.Text
+  deepLink  String?   @db.VarChar(255)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum SupportStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+model SupportRequest {
+  id          String        @id @default(cuid())
+  userId      String
+  bookingId   String?
+  category    String        @db.VarChar(32)
+  subject     String        @db.VarChar(160)
+  message     String        @db.Text
+  status      SupportStatus @default(OPEN)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  requestId String
+  actorId   String?
+  actorType String   @db.VarChar(16)
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  request SupportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}

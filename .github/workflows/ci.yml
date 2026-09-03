@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: onetrips
+          POSTGRES_USER: onetrips
+          POSTGRES_PASSWORD: onetrips
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U onetrips -d onetrips"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://onetrips:onetrips@localhost:5432/onetrips
+      REDIS_URL: redis://localhost:6379
+      FLIGHT_PROVIDER: mock
+      HOTEL_PROVIDER: mock
+      MOCK_GDS_SCENARIO: SUCCESS
+      MOCK_HOTEL_SCENARIO: SUCCESS
+      JWT_SECRET: ci-jwt-secret-not-for-production-use-32ch
+      JWT_ACCESS_SECRET: ci-jwt-access-secret-not-for-production
+      JWT_REFRESH_SECRET: ci-jwt-refresh-secret-not-for-production
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-32chars
+      OT_ALLOW_DEV_SECRETS: "1"
+      NOTIFY_INLINE: "1"
+      E2E_CUSTOMER_EMAIL: e2e.customer@onetrips.test
+      E2E_CUSTOMER_PASSWORD: E2eCustomer#14D
+      E2E_CUSTOMER_B_EMAIL: e2e.customer.b@onetrips.test
+      E2E_CUSTOMER_B_PASSWORD: E2eCustomerB#14D
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: npm run db:migrate:deploy
+      - run: npm run db:seed
+      - name: Seed is idempotent
+        run: npm run db:seed
+      - name: Empty PostgreSQL bootstrap
+        env:
+          EMPTY_BOOTSTRAP_DB: onetrips_empty_bootstrap
+        run: npm run db:bootstrap:empty
+      - run: npm test
+      - run: npm run test:integration
+      - name: Dependency audit (non-blocking)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+      - name: Build customer app
+        run: npm run build -w @onetrips/web
+      - name: Build B2B app
+        run: npm run build -w @onetrips/b2b
+      - name: Build admin app
+        run: npm run build -w @onetrips/admin
+      - name: Restore drill
+        env:
+          BACKUP_DIR: ./backups
+        run: npm run backup:drill
+      - name: Production acceptance
+        env:
+          BACKUP_DIR: ./backups
+          BACKUP_OFFSITE_DIR: ./backups/offsite
+          BACKUP_OFFSITE_REQUIRED: "YES"
+          ACCEPTANCE_SKIP_DRILL: "YES"
+        run: npm run accept
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Playwright
+        run: npm run test:e2e

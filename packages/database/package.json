@@ -1,0 +1,37 @@
+{
+  "name": "@onetrips/database",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./assert-url": "./src/assert-url.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "studio": "prisma studio",
+    "seed": "prisma db seed",
+    "lint": "echo \"no lint\""
+  },
+  "dependencies": {
+    "@onetrips/shared": "*",
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3"
+  },
+  "devDependencies": {
+    "@prisma/config": "^7.8.0",
+    "@types/bcryptjs": "^2.4.6",
+    "dotenv": "^17.4.2",
+    "prisma": "^6.19.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@onetrips/auth",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "echo \"no lint\""
+  },
+  "dependencies": {
+    "@onetrips/database": "*",
+    "@onetrips/notifications": "*",
+    "@onetrips/shared": "*",
+    "@onetrips/observability": "*",
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "typescript": "^5"
+  }
+}
