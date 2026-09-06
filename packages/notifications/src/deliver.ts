@@ -7,8 +7,13 @@ import { HttpSmsAdapter } from "./adapters/sms-http";
 import { interpolate, DEFAULT_TEMPLATES } from "./templates";
 import type { QueueJob } from "./types";
 
+/** Existing email-delivery gate: SMTP_HOST selects the SMTP adapter. */
+export function isEmailConfigured() {
+  return Boolean(process.env.SMTP_HOST);
+}
+
 export function getEmailAdapter() {
-  return process.env.SMTP_HOST ? new SmtpEmailAdapter() : new ConsoleEmailAdapter();
+  return isEmailConfigured() ? new SmtpEmailAdapter() : new ConsoleEmailAdapter();
 }
 
 export function getSmsAdapter() {

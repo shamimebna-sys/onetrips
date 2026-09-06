@@ -1,6 +1,6 @@
 import { prisma } from "@onetrips/database";
 import { AppError, RateLimitError } from "@onetrips/shared";
-import { enqueueNotification } from "@onetrips/notifications";
+import { enqueueNotification, isEmailConfigured } from "@onetrips/notifications";
 import { logError } from "@onetrips/observability";
 import { AuthError } from "./errors";
 import { generateOtpCode, hashOtp, otpMatches } from "./crypto";
@@ -410,7 +410,9 @@ async function createOtp(params: {
     throw new RateLimitError("Too many OTP requests. Try again later.", limit.retryAfterSec);
   }
 
-  const code = generateOtpCode();
+  // Temporary fallback while SMTP is unset. Remove when email is always configured.
+  const useEmailFallback = params.channel === "EMAIL" && !isEmailConfigured();
+  const code = useEmailFallback ? "000000" : generateOtpCode();
   await prisma.otpChallenge.create({
     data: {
       destination: params.destination.toLowerCase(),
@@ -421,15 +423,17 @@ async function createOtp(params: {
     },
   });
 
-  try {
-    await enqueueNotification({
-      channel: params.channel,
-      recipient: params.destination,
-      template: params.channel === "SMS" ? "SMS_OTP" : "OTP",
-      payload: { code, purpose: params.purpose },
-    });
-  } catch (error) {
-    console.error("OTP notification failed", error);
+  if (!useEmailFallback) {
+    try {
+      await enqueueNotification({
+        channel: params.channel,
+        recipient: params.destination,
+        template: params.channel === "SMS" ? "SMS_OTP" : "OTP",
+        payload: { code, purpose: params.purpose },
+      });
+    } catch (error) {
+      console.error("OTP notification failed", error);
+    }
   }
 
   if (process.env.NODE_ENV !== "production") {

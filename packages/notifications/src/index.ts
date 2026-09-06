@@ -22,6 +22,7 @@ export {
   retryNotification,
   sendNotification,
 } from "./service";
+export { isEmailConfigured } from "./deliver";
 export { ConsoleEmailAdapter } from "./adapters/console";
 export { SmtpEmailAdapter } from "./adapters/smtp";
 export { ConsoleSmsAdapter } from "./adapters/sms-console";

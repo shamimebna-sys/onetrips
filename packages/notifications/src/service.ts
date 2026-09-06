@@ -1,6 +1,6 @@
 import { prisma } from "@onetrips/database";
 import { DomainError } from "@onetrips/shared";
-import { deliverJob, getEmailAdapter, getSmsAdapter } from "./deliver";
+import { deliverJob, getEmailAdapter, getSmsAdapter, isEmailConfigured } from "./deliver";
 import { enqueueDelayed, enqueueJob, queueBackend, queueDepth } from "./queue";
 import type { EnqueueResult, NotificationMessage, QueueJob } from "./types";
 
@@ -51,7 +51,7 @@ export function describeNotificationProviders() {
     email: describeEmailProvider(),
     sms: describeSmsProvider(),
     queue: queueBackend(),
-    smtpConfigured: Boolean(process.env.SMTP_HOST),
+    smtpConfigured: isEmailConfigured(),
     smsConfigured: Boolean(process.env.SMS_API_URL),
   };
 }
